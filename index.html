@@ -3,179 +3,446 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>D9: Citizen Watch</title>
+    <title>D9 Civic OS | District Now</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
-        #map { height: 55vh; width: 100%; z-index: 0; }
-        .glass-panel { background: rgba(30, 41, 59, 0.95); backdrop-filter: blur(10px); border-top: 1px solid rgba(255,255,255,0.1); }
-        .btn-action { transition: all 0.2s; active: scale-95; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
         
-        /* Custom Map Markers */
-        .marker-pin {
-            width: 30px; height: 30px; border-radius: 50% 50% 50% 0; background: #c30b82; position: absolute; transform: rotate(-45deg);
-            left: 50%; top: 50%; margin: -15px 0 0 -15px;
+        /* Map Layer Styles */
+        #map { height: 100%; width: 100%; z-index: 0; }
+        
+        /* UI Elements */
+        .glass-panel { background: rgba(15, 23, 42, 0.90); backdrop-filter: blur(12px); border-top: 1px solid rgba(255,255,255,0.1); }
+        .situation-bar { background: #1e293b; border-bottom: 1px solid #334155; height: 48px; }
+        .nav-bar { height: 80px; background: #020617; border-top: 1px solid #1e293b; }
+        
+        /* Gold Card Effect */
+        .gold-card { 
+            background: linear-gradient(135deg, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c); 
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            text-shadow: 0 1px 2px rgba(255,255,255,0.5);
         }
-        .marker-pin::after {
-            content: ''; width: 14px; height: 14px; margin: 8px 0 0 8px; background: #fff; position: absolute; border-radius: 50%;
-        }
+        
+        /* Animations */
+        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+        .animate-pulse-red { animation: pulse-red 2s infinite; }
+        
+        /* Module Views */
+        .module-view { display: none; height: 100%; overflow-y: auto; padding-bottom: 100px; }
+        .module-view.active { display: block; }
+        
+        /* Scrollbar hide */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
-<body class="overflow-hidden h-screen flex flex-col">
+<body class="overflow-hidden h-screen flex flex-col text-sm">
 
-    <header class="bg-slate-900 border-b border-slate-700 p-4 flex justify-between items-center z-20 shadow-lg">
-        <div>
-            <h1 class="text-xl font-bold tracking-tighter text-white">D9 <span class="text-blue-500">WATCH</span></h1>
-            <p class="text-[10px] text-slate-400 uppercase tracking-widest">Powered by Quan for Council</p>
+    <header class="situation-bar flex items-center justify-between px-4 z-50 shrink-0 shadow-md">
+        <div class="flex items-center gap-2">
+            <div class="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+            <h1 class="font-bold tracking-tighter text-white">D9 <span class="text-blue-500">CIVIC OS</span></h1>
         </div>
-        <div class="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-xs">QS</div>
+        <div class="flex gap-3 text-[10px] font-mono text-slate-400">
+            <div class="flex items-center gap-1"><i class="fa-solid fa-coins text-yellow-500"></i> <span class="text-yellow-400">PTS: 1,250</span></div>
+            <div class="flex items-center gap-1"><i class="fa-solid fa-truck-medical text-green-500"></i> <span>FLEET: Active</span></div>
+        </div>
     </header>
 
-    <div id="map" class="flex-grow bg-slate-800 relative">
-        <div class="absolute top-4 left-4 z-[400] space-y-2 pointer-events-none">
-            <div id="feed-container">
-                </div>
-        </div>
-    </div>
-
-    <div class="glass-panel pb-8 pt-4 px-6 rounded-t-3xl -mt-6 z-10 shadow-[0_-5px_20px_rgba(0,0,0,0.5)]">
-        <div class="w-12 h-1 bg-slate-600 rounded-full mx-auto mb-6"></div>
+    <main class="flex-grow relative bg-slate-900 overflow-hidden">
         
-        <h2 class="text-xs font-bold text-slate-400 uppercase mb-4 tracking-widest text-center">Report Issue to Council</h2>
-        
-        <div class="grid grid-cols-3 gap-4">
-            <button onclick="dropPin('pothole')" class="btn-action flex flex-col items-center gap-2 group">
-                <div class="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-600 flex items-center justify-center group-hover:border-orange-500 group-hover:bg-slate-700 transition-colors shadow-lg">
-                    <i class="fa-solid fa-road text-2xl text-orange-500"></i>
-                </div>
-                <span class="text-[10px] font-semibold uppercase text-slate-300">Pothole</span>
-            </button>
+        <div id="view-map" class="module-view active w-full h-full relative">
+            <div id="map" class="h-full w-full"></div>
+            
+            <div class="absolute top-4 left-4 z-[400] space-y-2 pointer-events-none">
+                <div id="feed-container" class="flex flex-col gap-2"></div>
+            </div>
 
-            <button onclick="dropPin('dumping')" class="btn-action flex flex-col items-center gap-2 group">
-                <div class="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-600 flex items-center justify-center group-hover:border-red-500 group-hover:bg-slate-700 transition-colors shadow-lg">
-                    <i class="fa-solid fa-trash text-2xl text-red-500"></i>
-                </div>
-                <span class="text-[10px] font-semibold uppercase text-slate-300">Dumping</span>
-            </button>
-
-            <button onclick="dropPin('light')" class="btn-action flex flex-col items-center gap-2 group">
-                <div class="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-600 flex items-center justify-center group-hover:border-yellow-400 group-hover:bg-slate-700 transition-colors shadow-lg">
-                    <i class="fa-solid fa-lightbulb text-2xl text-yellow-400"></i>
-                </div>
-                <span class="text-[10px] font-semibold uppercase text-slate-300">Outage</span>
-            </button>
+            <div class="absolute bottom-6 right-4 z-[400] flex flex-col gap-3">
+                <button onclick="toggleLayer('medical')" class="w-10 h-10 rounded-full bg-slate-800 border border-slate-600 text-green-500 shadow-lg flex items-center justify-center hover:bg-slate-700 active:scale-95 transition-all" title="Toggle Medical Fleet">
+                    <i class="fa-solid fa-truck-medical"></i>
+                </button>
+                <button onclick="toggleLayer('safety')" class="w-10 h-10 rounded-full bg-slate-800 border border-slate-600 text-red-500 shadow-lg flex items-center justify-center hover:bg-slate-700 active:scale-95 transition-all" title="Toggle Safety Layer">
+                    <i class="fa-solid fa-car-burst"></i>
+                </button>
+                <button onclick="toggleLayer('air')" class="w-10 h-10 rounded-full bg-slate-800 border border-slate-600 text-blue-400 shadow-lg flex items-center justify-center hover:bg-slate-700 active:scale-95 transition-all" title="Toggle Air Sensors">
+                    <i class="fa-solid fa-wind"></i>
+                </button>
+                <button onclick="openReportModal()" class="w-14 h-14 rounded-full bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.5)] flex items-center justify-center hover:bg-blue-500 active:scale-95 transition-all animate-pulse-red">
+                    <i class="fa-solid fa-plus text-2xl"></i>
+                </button>
+            </div>
         </div>
 
-        <div class="mt-8 bg-slate-800/50 rounded-lg p-3 flex justify-between items-center border border-slate-700">
-            <div class="text-center w-1/3 border-r border-slate-700">
-                <span class="block text-xl font-bold text-white" id="stat-open">142</span>
-                <span class="text-[9px] text-slate-400 uppercase">Open Issues</span>
+        <div id="view-311" class="module-view px-4 py-6">
+            <h2 class="text-xl font-bold text-white mb-2">Shadow 311 <span class="text-xs font-normal text-slate-400 ml-2">Trust but Verify</span></h2>
+            
+            <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-6">
+                <h3 class="text-xs uppercase text-slate-400 font-bold mb-3 tracking-widest">Agency Honesty Scores</h3>
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>DPW&T (Roads)</span>
+                            <span class="text-red-400 font-mono">42% Verified</span>
+                        </div>
+                        <div class="h-2 bg-slate-700 rounded-full overflow-hidden">
+                            <div class="h-full bg-red-500 w-[42%]"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="text-center w-1/3 border-r border-slate-700">
-                <span class="block text-xl font-bold text-green-400">89%</span>
-                <span class="text-[9px] text-slate-400 uppercase">Resolved</span>
+            
+            <h3 class="text-xs uppercase text-slate-400 font-bold mb-3 tracking-widest">Verify Closures Near You</h3>
+            <div class="space-y-3">
+                <div class="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="bg-green-900/50 text-green-400 text-[10px] px-2 py-1 rounded border border-green-800">MARKED RESOLVED</span>
+                        <span class="text-slate-500 text-[10px]">10m ago</span>
+                    </div>
+                    <p class="text-white font-medium mb-1">Missed Trash Collection</p>
+                    <p class="text-slate-400 text-xs mb-3">8700 Block of Brandywine Rd. County says: "Collected."</p>
+                    <div class="flex gap-2">
+                        <button class="flex-1 py-2 bg-green-600/20 text-green-400 border border-green-600/50 rounded hover:bg-green-600/30 text-xs font-bold">IT'S GONE</button>
+                        <button class="flex-1 py-2 bg-red-600/20 text-red-400 border border-red-600/50 rounded hover:bg-red-600/30 text-xs font-bold">STILL THERE (LIE)</button>
+                    </div>
+                </div>
             </div>
-            <div class="text-center w-1/3">
-                <span class="block text-xl font-bold text-blue-400">D9</span>
-                <span class="text-[9px] text-slate-400 uppercase">Target Zone</span>
+        </div>
+
+        <div id="view-perks" class="module-view px-4 py-6">
+            <h2 class="text-xl font-bold text-white mb-2">The D9 Circuit <span class="text-xs font-normal text-slate-400 ml-2">Keep It In D9</span></h2>
+            
+            <div class="gold-card rounded-2xl p-6 mb-6 text-slate-900 relative overflow-hidden transform transition-all hover:scale-105 duration-300">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 class="font-black text-xl tracking-tighter">D9 CITIZEN ID</h3>
+                        <p class="text-xs font-semibold opacity-75">DISTRICT NINE • MARYLAND</p>
+                    </div>
+                    <div class="text-right">
+                        <span class="block font-bold text-lg">1,250</span>
+                        <span class="text-[9px] uppercase font-bold tracking-wider">Civic Points</span>
+                    </div>
+                </div>
+                <div class="flex gap-4 items-center">
+                    <div class="bg-white p-1 rounded-lg shadow-inner">
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=D9-RESIDENT-ID-12345" alt="QR Code" class="w-16 h-16">
+                    </div>
+                    <div>
+                        <p class="font-bold text-sm uppercase">Resident Name</p>
+                        <p class="text-xs font-mono">ID: 09-442-881</p>
+                        <p class="text-[10px] mt-1 font-bold bg-black/10 px-2 py-1 rounded inline-block">VERIFIED VOTER</p>
+                    </div>
+                </div>
             </div>
+
+            <h3 class="text-xs uppercase text-slate-400 font-bold mb-3 tracking-widest">Local Perks (5-10% Off)</h3>
+            <div class="space-y-3">
+                <div class="bg-slate-800 border border-slate-700 rounded-lg p-3 flex gap-3 items-center hover:border-yellow-500 transition-colors cursor-pointer group">
+                    <div class="w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center text-yellow-500 text-xl group-hover:scale-110 transition-transform"><i class="fa-solid fa-utensils"></i></div>
+                    <div>
+                        <h4 class="text-white font-bold text-sm">Mama's Kitchen</h4>
+                        <p class="text-slate-400 text-[10px]">Brandywine • 10% Off Entrees</p>
+                    </div>
+                </div>
+                <div class="bg-slate-800 border border-slate-700 rounded-lg p-3 flex gap-3 items-center hover:border-yellow-500 transition-colors cursor-pointer group">
+                    <div class="w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center text-blue-400 text-xl group-hover:scale-110 transition-transform"><i class="fa-solid fa-scissors"></i></div>
+                    <div>
+                        <h4 class="text-white font-bold text-sm">Fade Masters</h4>
+                        <p class="text-slate-400 text-[10px]">Clinton • $5 Off Haircuts</p>
+                    </div>
+                </div>
+                <div class="bg-slate-800 border border-slate-700 rounded-lg p-3 flex gap-3 items-center hover:border-yellow-500 transition-colors cursor-pointer group">
+                    <div class="w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center text-green-400 text-xl group-hover:scale-110 transition-transform"><i class="fa-solid fa-wrench"></i></div>
+                    <div>
+                        <h4 class="text-white font-bold text-sm">D9 Auto Repair</h4>
+                        <p class="text-slate-400 text-[10px]">Accokeek • 5% Off Labor</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-health" class="module-view px-4 py-6">
+            <h2 class="text-xl font-bold text-white mb-2">D9 Care Connect <span class="text-xs font-normal text-slate-400 ml-2">15-Min Care</span></h2>
+            
+            <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xs uppercase text-green-400 font-bold tracking-widest"><i class="fa-solid fa-truck-medical mr-1"></i> Mobile Fleet Status</h3>
+                    <span class="bg-green-900/50 text-green-400 text-[9px] px-2 py-1 rounded border border-green-800 animate-pulse">LIVE TRACKING</span>
+                </div>
+                <div class="space-y-3">
+                    <div class="bg-slate-900/50 p-3 rounded-lg border-l-2 border-green-500">
+                        <div class="flex justify-between">
+                            <span class="text-white font-bold text-xs">Unit 1: Primary Care</span>
+                            <span class="text-green-400 text-[10px]">On Site</span>
+                        </div>
+                        <p class="text-slate-400 text-[10px] mt-1">Accokeek Fire Station (Mon Schedule)</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-6">
+                <h3 class="text-xs uppercase text-slate-400 font-bold mb-3 tracking-widest">Rural Broadband Check</h3>
+                <p class="text-[10px] text-slate-300 mb-3">Prove carriers are failing the "Rural Tier" agreement.</p>
+                
+                <button onclick="runSpeedTest()" class="w-full py-3 bg-blue-600/20 text-blue-400 border border-blue-500/50 rounded-lg hover:bg-blue-600/30 text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-95" id="speed-btn">
+                    <i class="fa-solid fa-gauge-high"></i> TEST MY CONNECTION
+                </button>
+                
+                <div id="speed-result" class="hidden mt-3 text-center text-xs text-red-400 font-mono animate-pulse">
+                    <span class="block text-xl font-bold">4.2 Mbps</span>
+                    <span class="text-[9px] uppercase">Insufficient for Telehealth</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-zoning" class="module-view px-4 py-6">
+            <h2 class="text-xl font-bold text-white mb-2">Zoning Radar <span class="text-xs font-normal text-slate-400 ml-2">Decode & Defend</span></h2>
+            <div class="bg-yellow-900/20 border border-yellow-600/50 rounded-xl p-4 mb-6">
+                <div class="flex gap-3">
+                    <i class="fa-solid fa-triangle-exclamation text-yellow-500 text-xl mt-1"></i>
+                    <div>
+                        <h3 class="text-yellow-500 font-bold">Hearing Alert: Feb 6th</h3>
+                        <p class="text-slate-300 text-xs">District Council voting on "Text Amendment 55" which bypasses master plan limits in Brandywine.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <nav class="nav-bar grid grid-cols-5 items-center justify-items-center z-50 px-2 pb-4 pt-2">
+        <button onclick="switchTab('map')" class="nav-btn active flex flex-col items-center gap-1 p-2 text-blue-500 hover:text-blue-400 w-full">
+            <i class="fa-solid fa-map text-lg"></i>
+            <span class="text-[9px] uppercase tracking-wide">Map</span>
+        </button>
+        <button onclick="switchTab('311')" class="nav-btn flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-blue-400 w-full">
+            <i class="fa-solid fa-clipboard-check text-lg"></i>
+            <span class="text-[9px] uppercase tracking-wide">Verify</span>
+        </button>
+        <button onclick="switchTab('health')" class="nav-btn flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-blue-400 w-full">
+            <i class="fa-solid fa-heart-pulse text-lg"></i>
+            <span class="text-[9px] uppercase tracking-wide">Care</span>
+        </button>
+        <button onclick="switchTab('zoning')" class="nav-btn flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-blue-400 w-full">
+            <i class="fa-solid fa-building-columns text-lg"></i>
+            <span class="text-[9px] uppercase tracking-wide">Zoning</span>
+        </button>
+        <button onclick="switchTab('perks')" class="nav-btn flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-blue-400 w-full">
+            <i class="fa-solid fa-wallet text-lg text-yellow-500"></i>
+            <span class="text-[9px] uppercase tracking-wide text-yellow-500">Perks</span>
+        </button>
+    </nav>
+
+    <div id="report-modal" class="fixed inset-0 z-[500] bg-black/80 backdrop-blur-sm hidden flex items-end sm:items-center justify-center">
+        <div class="bg-slate-900 w-full sm:w-96 rounded-t-2xl sm:rounded-2xl p-6 border-t sm:border border-slate-700 shadow-2xl transform transition-transform duration-300 translate-y-full" id="report-modal-content">
+            <div class="w-12 h-1 bg-slate-600 rounded-full mx-auto mb-6"></div>
+            <h2 class="text-lg font-bold text-white mb-4 text-center">New Report</h2>
+            <div class="grid grid-cols-3 gap-4 mb-4">
+                <button onclick="submitReport('dragrace')" class="flex flex-col items-center gap-2 p-3 bg-slate-800 rounded-xl border border-slate-700 hover:bg-slate-700 hover:border-red-500">
+                    <i class="fa-solid fa-gauge-high text-2xl text-red-500"></i>
+                    <span class="text-[10px] text-slate-300">Drag Racing</span>
+                </button>
+                <button onclick="submitReport('odor')" class="flex flex-col items-center gap-2 p-3 bg-slate-800 rounded-xl border border-slate-700 hover:bg-slate-700 hover:border-orange-500">
+                    <i class="fa-solid fa-mask-face text-2xl text-orange-500"></i>
+                    <span class="text-[10px] text-slate-300">Ind. Odor</span>
+                </button>
+                <button onclick="submitReport('dumping')" class="flex flex-col items-center gap-2 p-3 bg-slate-800 rounded-xl border border-slate-700 hover:bg-slate-700 hover:border-yellow-500">
+                    <i class="fa-solid fa-trash text-2xl text-yellow-500"></i>
+                    <span class="text-[10px] text-slate-300">Dumping</span>
+                </button>
+            </div>
+            <button onclick="closeReportModal()" class="w-full py-3 bg-slate-800 text-slate-400 rounded-lg font-bold mt-2">Cancel</button>
         </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
     <script>
-        // --- 1. INITIALIZE MAP (Focused on Clinton/Fort Washington) ---
-        // Coordinates for Clinton, MD
-        const startLat = 38.766; 
-        const startLng = -76.898; 
+        // --- 1. APP STATE & INIT ---
+        let currentTab = 'map';
         
-        const map = L.map('map', { zoomControl: false }).setView([startLat, startLng], 13);
+        // Map Init (Centered on D9 - Clinton/Brandywine/Accokeek area)
+        const map = L.map('map', { zoomControl: false }).setView([38.74, -76.96], 12);
 
-        // Dark Mode Map Tiles (CartoDB Dark Matter)
+        // Dark Mode Tiles
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            attribution: '&copy; OpenStreetMap &copy; CARTO',
             subdomains: 'abcd',
             maxZoom: 20
         }).addTo(map);
 
-        // --- 2. DEMO DATA (Fake existing reports) ---
-        const demoPoints = [
-            { lat: 38.768, lng: -76.902, type: 'pothole' },
-            { lat: 38.762, lng: -76.890, type: 'dumping' },
-            { lat: 38.770, lng: -76.885, type: 'light' }
-        ];
-
-        // Icons
-        const getIcon = (type) => {
-            let color = type === 'pothole' ? '#f97316' : type === 'dumping' ? '#ef4444' : '#facc15';
-            return L.divIcon({
-                className: 'custom-div-icon',
-                html: `<div style="background-color:${color}" class="w-3 h-3 rounded-full shadow-[0_0_10px_${color}] border-2 border-white"></div>`,
-                iconSize: [12, 12],
-                iconAnchor: [6, 6]
-            });
+        // --- 2. LAYERS (Simulated Data) ---
+        const layers = {
+            safety: L.layerGroup(),
+            air: L.layerGroup(),
+            medical: L.layerGroup()
         };
 
-        // Add Demo Points
-        demoPoints.forEach(pt => {
-            L.marker([pt.lat, pt.lng], { icon: getIcon(pt.type) }).addTo(map);
+        // Highway of Death (Rt 210) Heatmap/Danger Zones
+        const rt210Points = [
+            [38.77, -76.98], [38.75, -76.99], [38.72, -77.00], [38.70, -77.01], [38.68, -77.03]
+        ];
+        const rt210Line = L.polyline(rt210Points, {color: '#ef4444', weight: 6, opacity: 0.6}).addTo(layers.safety);
+        
+        const crashZones = [[38.75, -76.99], [38.70, -77.01]];
+        crashZones.forEach(pt => {
+            L.marker(pt, {
+                icon: L.divIcon({
+                    className: '',
+                    html: '<div class="text-red-500"><i class="fa-solid fa-skull-crossbones text-xl animate-pulse"></i></div>',
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
+                })
+            }).addTo(layers.safety);
         });
 
-        // --- 3. INTERACTION LOGIC ---
-        function dropPin(type) {
-            // Get center of current view to "simulate" GPS
-            const center = map.getCenter();
-            
-            // Add a little random offset so pins don't stack perfectly
-            const lat = center.lat + (Math.random() - 0.5) * 0.005;
-            const lng = center.lng + (Math.random() - 0.5) * 0.005;
+        // Air Quality Sensors
+        const sensorLocs = [
+            {loc: [38.69, -76.85], val: 112}, {loc: [38.71, -76.88], val: 98}, {loc: [38.66, -76.84], val: 125}
+        ];
+        sensorLocs.forEach(s => {
+            let colorClass = s.val > 100 ? 'bg-orange-500/20 border-orange-500 text-orange-500' : 'bg-green-500/20 border-green-500 text-green-500';
+            L.marker(s.loc, {
+                icon: L.divIcon({
+                    className: '',
+                    html: `<div class="sensor-marker w-8 h-8 rounded-full ${colorClass} border-2">${s.val}</div>`,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
+                })
+            }).addTo(layers.air);
+        });
 
-            // Add Marker
-            const marker = L.marker([lat, lng], { icon: getIcon(type) }).addTo(map);
-            
-            // Pan map slightly
-            map.flyTo([lat, lng], 14, { duration: 1 });
+        // Mobile Medical Fleet Markers
+        const medicalUnits = [
+            {loc: [38.66, -77.03], name: 'Unit 1: Accokeek', status: 'Active'},
+            {loc: [38.56, -76.71], name: 'Unit 2: Eagle Harbor', status: 'En Route'},
+            {loc: [38.76, -76.89], name: 'Unit 3: Clinton', status: 'Active'}
+        ];
+        medicalUnits.forEach(u => {
+            L.marker(u.loc, {
+                icon: L.divIcon({
+                    className: '',
+                    html: '<div class="w-8 h-8 bg-green-600 rounded-full border-2 border-white flex items-center justify-center text-white shadow-lg animate-bounce"><i class="fa-solid fa-truck-medical"></i></div>',
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
+                })
+            }).addTo(layers.medical);
+        });
 
-            // Add to "Live Feed"
-            addToFeed(type);
+        // --- 3. UI LOGIC ---
+        function switchTab(tabId) {
+            // Hide all views
+            document.querySelectorAll('.module-view').forEach(el => el.classList.remove('active'));
+            document.getElementById(`view-${tabId}`).classList.add('active');
 
-            // Update stats
-            const statEl = document.getElementById('stat-open');
-            let count = parseInt(statEl.innerText);
-            statEl.innerText = count + 1;
+            // Update Nav Buttons
+            document.querySelectorAll('.nav-btn').forEach(el => {
+                el.classList.remove('text-blue-500');
+                el.classList.add('text-slate-500');
+            });
 
-            // Simple Haptic Feedback (Vibrate phone)
-            if (navigator.vibrate) navigator.vibrate(50);
+            // Handle Active State Colors
+            if(tabId === 'perks') {
+                // Perks tab is yellow, handled in HTML
+            } else {
+                // Find the button that triggered this (or find by ID if triggered programmatically)
+                // For simplicity in this demo, we assume click event
+                if(event && event.currentTarget) {
+                    event.currentTarget.classList.remove('text-slate-500');
+                    event.currentTarget.classList.add('text-blue-500');
+                }
+            }
+
+            // Map invalidation fix
+            if(tabId === 'map') setTimeout(() => map.invalidateSize(), 100);
         }
 
-        function addToFeed(type) {
+        function toggleLayer(layerName) {
+            const layer = layers[layerName];
+            if(map.hasLayer(layer)) {
+                map.removeLayer(layer);
+                showToast(`${layerName.toUpperCase()} Layer Hidden`);
+            } else {
+                map.addLayer(layer);
+                showToast(`${layerName.toUpperCase()} Layer Active`);
+            }
+        }
+
+        function runSpeedTest() {
+            const resultEl = document.getElementById('speed-result');
+            const btn = document.getElementById('speed-btn');
+            
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> TESTING...';
+            
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fa-solid fa-gauge-high"></i> TEST MY CONNECTION';
+                resultEl.classList.remove('hidden');
+                showToast("Data logged for Rural Broadband compliance.");
+            }, 2000);
+        }
+
+        function openReportModal() {
+            const modal = document.getElementById('report-modal');
+            const content = document.getElementById('report-modal-content');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                content.classList.remove('translate-y-full');
+            }, 10);
+        }
+
+        function closeReportModal() {
+            const modal = document.getElementById('report-modal');
+            const content = document.getElementById('report-modal-content');
+            content.classList.add('translate-y-full');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        function submitReport(type) {
+            closeReportModal();
+            showToast(`Report Submitted: ${type.toUpperCase()}`);
+            
+            // Add point to map (simulated)
+            const center = map.getCenter();
+            L.marker(center, {
+                icon: L.divIcon({
+                    className: '',
+                    html: '<div class="w-3 h-3 bg-blue-500 rounded-full shadow-[0_0_10px_blue] border border-white"></div>',
+                    iconSize: [12, 12],
+                    iconAnchor: [6, 6]
+                })
+            }).addTo(map);
+
+            // Gamification Feedback
+            setTimeout(() => {
+                showToast("+10 District Defender Points!");
+            }, 1500);
+        }
+
+        function showToast(msg) {
             const container = document.getElementById('feed-container');
-            
             const item = document.createElement('div');
-            item.className = "bg-slate-900/80 backdrop-blur text-white text-[10px] py-1 px-3 rounded-full border border-slate-700 animate-in fade-in slide-in-from-left duration-500 shadow-lg flex items-center gap-2";
-            
-            let label = type === 'pothole' ? 'POTHOLE REPORTED' : type === 'dumping' ? 'ILLEGAL DUMPING' : 'OUTAGE REPORTED';
-            let color = type === 'pothole' ? 'bg-orange-500' : type === 'dumping' ? 'bg-red-500' : 'bg-yellow-500';
-            
-            item.innerHTML = `<span class="w-2 h-2 rounded-full ${color} animate-pulse"></span> ${label} <span class="text-slate-500 ml-1">Just now</span>`;
+            item.className = "bg-slate-900/90 backdrop-blur text-white text-[10px] py-2 px-3 rounded-md border border-slate-700 shadow-xl flex items-center gap-2 animate-[slideIn_0.3s_ease-out]";
+            item.innerHTML = `<i class="fa-solid fa-circle-info text-blue-500"></i> ${msg}`;
             
             container.prepend(item);
 
-            // Remove after 4 seconds to keep clean
-            setTimeout(() => {
-                item.classList.add('opacity-0');
-                setTimeout(() => item.remove(), 500);
-            }, 4000);
+            setTimeout(() => item.remove(), 4000);
         }
+
+        // Initialize layers by default
+        map.addLayer(layers.safety);
+        map.addLayer(layers.medical);
     </script>
 </body>
 </html>
